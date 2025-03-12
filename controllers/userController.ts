@@ -11,23 +11,34 @@ async function login(req:Request,res:Response):Promise<any>{
         const {email,password} = req.body as {email:string,password:string};
         const user = await User.findOne({email});
         if(!user){
-            return res.status(404).json({message:"User not found"});
+            return res.status(404).json({email_message:"User not found"});
         }
         const isMatched = await bcrypt.compare(password,user.password);
         if(!isMatched){
-            return res.status(401).json({message:"Invalid credentials"});
+            return res.status(401).json({password_message:"Invalid credentials"});
         }
         const token = jwt.sign(
             {
-                id: user._id,
-                email: user.email
+                email:user.email,
+                role:user.role,
+                _id:user._id,
             },
                 process.env.SECRET_KEY as string,
             {
                 expiresIn:"7d"
             }
         )
-        res.status(200).json({token});
+        user.isLoggedIn = true;
+        await user.save();
+        return res.status(200).json({
+            token,
+            user:{
+                firstName:user.firstName,
+                lastName:user.lastName,
+                email:user.email,
+                avatar:user.avatar||""
+            }
+        });
     } catch (error) {
         console.log(error);
     }
@@ -37,42 +48,56 @@ async function signup(req:Request, res:Response):Promise<any>{
         const {firstName,lastName,email,password} = req.body as {firstName:string,lastName:string,email:string,password:string};
         const existingUser = await User.findOne({firstName,lastName});
         if(existingUser){
-            return res.status(409).json({message:"User already exists"});
+            return res.status(409).json({user_message:"User already exists"});
         }
         const user = await User.findOne({email});
         if(user){
-            return res.status(409).json({message:"User already exists"});
+            return res.status(409).json({email_message:"User already exists"});
         }
         if(!firstName ||!lastName){
-            return res.status(400).json({message:"First name and last name are required"});
+            return res.status(400).json({user_message:"First name and last name are required"});
         }
         if(!email){
-            return res.status(400).json({message:"Email is required"});
+            return res.status(400).json({email_message:"Email is required"});
         }
         if(!email.match(emailRegex)){
-            return res.status(400).json({message:"Invalid email"});
+            return res.status(400).json({email_message:"Invalid email"});
         }
         if(password.length < 4){
-            return res.status(400).json({message:"Password must be at least 4 characters long"});
+            return res.status(400).json({password_message:"Password must be at least 4 characters long"});
         }
+        const latestUserIndex = await User.find({}).sort({index:-1}).limit(1).select({index:1});
+        const index = latestUserIndex.length > 0 ? latestUserIndex[0].index + 1 : 1;
         const newUser = new User({
             firstName,
             lastName,
             email,
-            password
+            password,
+            index,
+            role:index > 10 ? "USER" : "ADMIN",
+            isLoggedIn: true
         });
         await newUser.save();
         const token = jwt.sign(
             {
-                id: newUser._id,
-                email: newUser.email
+                email:newUser.email,
+                role:newUser.role,
+                _id:newUser._id,
             },
                 process.env.SECRET_KEY as string,
             {
                 expiresIn:"7d"
             }
         )
-        res.status(201).json({token});
+        return res.status(200).json({
+            token,
+            user:{
+                firstName:newUser.firstName,
+                lastName:newUser.lastName,
+                email:newUser.email,
+                avatar:newUser.avatar||""
+            }
+        });
     } catch (error) {
         console.log(error);
     }
@@ -122,7 +147,7 @@ async function getUsers(req:Request, res:Response):Promise<any>{
         const page = parseInt(req.params.p as string) || 1;
         const limit = 10;
         const skip = (page - 1) * limit;
-        const users = await User.find({}).select({
+        const users = await User.find({role:"USER"}).select({
             firstName: 1,
             lastName: 1,
             email: 1,
@@ -130,9 +155,27 @@ async function getUsers(req:Request, res:Response):Promise<any>{
             createdAt: 1,
             updatedAt: 1
         }).skip(skip).limit(limit);
+        const usersPerMonth = await User.aggregate([
+            // {
+            //     $match: { role: "USER" }
+            // },
+            {
+                $group: {
+                    _id: {
+                        // year: { $year: "$createdAt" },
+                        month: { $month: "$createdAt" },
+                        // day: { $dayOfMonth: "$createdAt" }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+            {
+                $sort: { "_id.year": 1, "_id.month": 1 }
+            }
+        ]);
         const total = await User.countDocuments();
         const totalPages = Math.ceil(total / limit);
-        res.status(200).json({users,page,pages:totalPages});
+        res.status(200).json({users,page,pages:totalPages,usersPerMonth});
     } catch (error) {
         console.log(error);
     }

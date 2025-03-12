@@ -1,24 +1,28 @@
+import bcrypt from 'bcrypt';
 import { NextFunction, Request, Response } from "express";
 import User from "../models/User";
 import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
 dotenv.config();
-export async function checkUser(req: Request, res: Response, next: NextFunction): Promise<any> {
+export async function checkAdmin(req: Request, res: Response, next: NextFunction): Promise<any> {
     try {
         const auth_token = req.cookies.auth_token;
         if (!auth_token) {
-            return res.status(401).json({ error: "Unauthorized" });
+            return res.status(401).json({ token_err: "Unauthorized" });
         }
         let decoded;
         try {
             decoded = jwt.verify(auth_token, process.env.SECRET_KEY as string) as { email: string };
         } catch (err) {
             console.error("Token verification failed:", err);
-            return res.status(401).json({ error: "Invalid token" });
+            return res.status(401).json({ token_err: "Invalid token" });
         }
         const user = await User.findOne({ email: decoded.email });
         if (!user) {
-            return res.status(401).json({ error: "User not found" });
+            return res.status(401).json({ user_err: "Unauthorized" });
+        }
+        if (user.role !== "ADMIN") {
+            return res.status(403).json({ role_err: "Forbidden: Admins only" });
         }
         next();
     } catch (error) {

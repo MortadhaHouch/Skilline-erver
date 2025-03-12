@@ -35,6 +35,10 @@ const userSchema = new Schema({
     },
     interests:{
         type: [String]
+    },
+    index:{
+        type: Number,
+        required: true
     }
 },{
     timestamps:true
