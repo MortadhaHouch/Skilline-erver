@@ -1,0 +1,11 @@
+import {answerQuiz, createQuiz,deleteQuiz,getAllQuizzes,getQuizById} from "../controllers/quizController";
+import {Router} from "express";
+import { checkUser } from "../middlewares/checkUser";
+import { checkAdmin } from "../middlewares/checkAdmin";
+const quizRouter = Router();
+quizRouter.post("/:communityId/:courseId/:quizId",checkUser,answerQuiz);
+quizRouter.get("/:communityId/:id",checkUser,getAllQuizzes);
+quizRouter.get("/:communityId/:courseId/:quizId",checkUser,getQuizById);
+quizRouter.post("/:communityId/:id",checkUser,checkAdmin,createQuiz);
+quizRouter.delete("/:communityId/:courseId/:quizId",checkUser,checkAdmin,deleteQuiz);
+export default quizRouter;

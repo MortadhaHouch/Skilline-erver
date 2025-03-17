@@ -5,6 +5,11 @@ import jwt from "jsonwebtoken"
 import dotenv from "dotenv";
 import { emailRegex } from '../utils/constant';
 import { isValidObjectId } from 'mongoose';
+import Post from '../models/Post';
+import Comment from '../models/Comment';
+import Community from '../models/Community';
+import Quiz from '../models/Quiz';
+import Notification from '../models/Notification';
 dotenv.config();
 async function login(req:Request,res:Response):Promise<any>{
     try {
@@ -106,12 +111,12 @@ async function logout(req:Request, res:Response):Promise<any>{
     try {
         const auth_token = req.cookies.auth_token;
         if(!auth_token){
-            return res.status(401).json({message:"No token provided"});
+            return res.status(401).json({auth_message:"No token provided"});
         }
         const {email} = jwt.verify(auth_token,process.env.SECRET_KEY as string) as {email:string};
         const user = await User.findOne({email});
         if(!user){
-            return res.status(401).json({message:"User not found"});
+            return res.status(401).json({user_message:"User not found"});
         }
         user.isLoggedIn = false;
         await user.save();
@@ -147,18 +152,28 @@ async function getUsers(req:Request, res:Response):Promise<any>{
         const page = parseInt(req.params.p as string) || 1;
         const limit = 10;
         const skip = (page - 1) * limit;
+        const auth_token = req.cookies.auth_token;
+        if(!auth_token){
+            return res.status(401).json({auth_message:"No token provided"});
+        }
+        const {email} = jwt.verify(auth_token,process.env.SECRET_KEY as string) as {email:string};
+        const user = await User.findOne({email});
+        if(!user){
+            return res.status(401).json({user_message:"User not found"});
+        }
         const users = await User.find({role:"USER"}).select({
             firstName: 1,
             lastName: 1,
             email: 1,
             isLoggedIn: 1,
             createdAt: 1,
-            updatedAt: 1
+            updatedAt: 1,
+            index:1
         }).skip(skip).limit(limit);
         const usersPerMonth = await User.aggregate([
-            // {
-            //     $match: { role: "USER" }
-            // },
+            {
+                $match: { role: "USER" }
+            },
             {
                 $group: {
                     _id: {
@@ -174,8 +189,19 @@ async function getUsers(req:Request, res:Response):Promise<any>{
             }
         ]);
         const total = await User.countDocuments();
+        const notificationsCount = await Notification.countDocuments(
+            {
+                "to.user":user._id
+            }
+        );
         const totalPages = Math.ceil(total / limit);
-        res.status(200).json({users,page,pages:totalPages,usersPerMonth});
+        res.status(200).json({
+            users,
+            page,
+            pages:totalPages,
+            usersPerMonth,
+            notifications:notificationsCount
+        });
     } catch (error) {
         console.log(error);
     }
@@ -227,4 +253,75 @@ async function getUsersFiltered(req:Request, res:Response):Promise<any>{
         console.log(error);
     }
 }
-export {login,signup,logout,getUsers,getUser,getUsersFiltered}
+async function getStats(req:Request, res:Response):Promise<any>{
+    try {
+        const auth_token = req.cookies.auth_token;
+        if(!auth_token){
+            return res.status(401).json({auth_message:"No token provided"});
+        }
+        const {email} = jwt.verify(auth_token,process.env.SECRET_KEY as string) as {email:string};
+        const user = await User.findOne({email});
+        if(!user){
+            return res.status(401).json({user_message:"User not found"});
+        }
+        const postsCount = await Post.countDocuments({author:user._id});
+        const mostRelevantPosts = await Post.find({author:user._id}).select({likes:1,dislikes:1,comments:1}).sort({likes:-1}).limit(5);
+        const likedPosts = await Post.countDocuments({likers:{$in:[user._id]}});
+        const dislikedPosts = await Post.countDocuments({dislikers:{$in:[user._id]}});
+        const latestPosts = await Post.find({author:user._id}).sort({createdAt:-1}).limit(5);
+        const comments = await Comment.countDocuments({author:user._id});
+        const administratedCommunities = await Community.countDocuments({admin:user._id});
+        const communities = await Community.countDocuments({members:{$in:[user._id]}});
+        const createdQuizzes = await Quiz.countDocuments({creator:user._id});
+        const challenges = await Quiz.aggregate([
+            {
+                $match:{
+                    $or:[
+                        {participators:{$in:[user._id]}},
+                        {creator:user._id}
+                    ]
+                }
+            },
+            {
+                $group: {
+                    _id: {
+                        // year: { $year: "$createdAt" },
+                        month: { $month: "$createdAt" },
+                        // day: { $dayOfMonth: "$createdAt" }
+                    },
+                    count: { $sum: 1 }
+                }
+            },
+        ]);
+        const userData = {
+            firstName:user.firstName,
+            lastName:user.lastName,
+            email:user.email,
+            avatar:user.avatar||"",
+            bio:user.bio||"",
+            role:user.role,
+            isLoggedIn:user.isLoggedIn,
+            createdAt:user.createdAt.toLocaleDateString(),
+            updatedAt:user.updatedAt.toLocaleDateString(),
+            interests:user.interests,
+            index:user.index,
+            stats:{
+                posts:postsCount,
+                latestPosts,
+                comments:comments,
+                mostRelevantPosts,
+                dislikedPosts,
+                likedPosts,
+                administratedCommunities,
+                communities,
+                createdQuizzes,
+                challenges
+            }
+        }
+        res.status(200).json({data:userData});
+    } catch (error) {
+        console.log(error);
+        res.status(500).json({message:"Internal server error"});
+    }
+}
+export {login,signup,logout,getUsers,getUser,getUsersFiltered,getStats}

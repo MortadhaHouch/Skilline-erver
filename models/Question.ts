@@ -10,7 +10,7 @@ const resultSchema = new Schema({
         required: true 
     },
     user: { 
-        type: Schema.Types.ObjectId, 
+        type: Schema.Types.ObjectId,
         ref: "User", 
         required: true 
     },
@@ -21,7 +21,7 @@ const questionSchema = new Schema({
         ref: "Quiz", 
         required: true 
     },
-    answers: { 
+    options: { 
         type: [String], 
         required: true 
     },
@@ -36,6 +36,10 @@ const questionSchema = new Schema({
         required: true
     },
     results: [resultSchema],
+    question: {
+        type: String,
+        required: true
+    },
     time: {
         type: Number,
         required: false,

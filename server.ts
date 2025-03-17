@@ -9,6 +9,11 @@ import connectToDB from "./config/connect";
 import fileUpload from "express-fileupload";
 import courseRouter from "./routes/course.route";
 import communityRouter from "./routes/community.route";
+import { rateLimit } from 'express-rate-limit'
+import messageRouter from "./routes/message.route";
+import notificationRouter from "./routes/notification.route";
+import postRouter from "./routes/post.route";
+import quizRouter from "./routes/quiz.route";
 dotenv.config()
 const app = express();
 app.use(cors({
@@ -16,6 +21,14 @@ app.use(cors({
     credentials: true,
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH"]
 }))
+const limiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	limit: 100,
+	legacyHeaders: false,
+    message: "Too many requests, please try again later.",
+    statusCode: 429,
+})
+app.use(limiter);
 app.use(helmet());
 connectToDB();
 app.use(express.json());
@@ -29,8 +42,14 @@ app.use((req:Request,res:Response,next:NextFunction)=>{
     console.log(req.method,req.url,new Date().toLocaleDateString());
     next();
 })
-app.use("/user",userRouter);
 app.use("/community",communityRouter);
 app.use("/course",courseRouter);
+app.use("/comment",communityRouter);
+app.use("/message",messageRouter);
+app.use("/notification",notificationRouter);
+app.use("/post",postRouter);
+app.use("/user",userRouter);
+app.use("/quiz",quizRouter);
+
 const {PORT} = process.env;
 app.listen(PORT,()=>console.log(`Server is running on port ${PORT}`));

@@ -1,12 +1,17 @@
 import {Router} from "express";
-import { createCourse, deleteCourse, getAllCourses, getCourseById } from "../controllers/courseController";
+import { createCourse, deleteCourse, getAllCourses, getCourseById, getCoursesByCommunity,addResource,updateResources,updateCourse,bufferFile } from "../controllers/courseController";
 import { checkUser } from "../middlewares/checkUser";
 import { checkAdmin } from "../middlewares/checkAdmin";
-import { checkAccess } from "../middlewares/checkAccess";
 
 const courseRouter = Router();
-courseRouter.get("/",checkUser,checkAccess,getAllCourses);
-courseRouter.get("/:id",checkUser,checkAccess,getCourseById);
-courseRouter.post("/add",checkUser,checkAccess,checkAdmin,createCourse);
-courseRouter.delete("/delete/:id",checkUser,checkAccess,checkAdmin,deleteCourse);
+courseRouter.get("/",checkUser,getAllCourses);
+courseRouter.get("/by-community/:id",checkUser,getCoursesByCommunity);
+courseRouter.get("/:id",checkUser,getCourseById);
+
+courseRouter.get("/file/:communityId/:id/:resource", checkUser, checkAdmin, bufferFile);
+courseRouter.post("/add/:id",checkUser,checkAdmin,createCourse);
+courseRouter.put("/update/:communityId/:id",checkUser,checkAdmin,updateCourse);
+courseRouter.put("/update-resources/:communityId/:id",checkUser,checkAdmin,updateResources);
+courseRouter.put("/add-resource/:communityId/:id",checkUser,checkAdmin,addResource);
+courseRouter.delete("/delete/:id",checkUser,checkAdmin,deleteCourse);
 export default courseRouter;

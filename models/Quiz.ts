@@ -1,4 +1,4 @@
-import {Schema,model} from "mongoose";
+import mongoose, {Schema,model} from "mongoose";
 const quizSchema = new Schema({
     topic:{
         type: String,
@@ -15,11 +15,28 @@ const quizSchema = new Schema({
     questions:{
         type: [Schema.Types.ObjectId],
         ref: "Question"
+    },
+    difficulty:{
+        type: String,
+        enum: ["EASY", "MEDIUM", "HARD"],
+        default: "MEDIUM"
     }
 },{
     timestamps: true
 })
-
+quizSchema.pre("deleteOne",async function (next) {
+    const filter = this.getFilter();
+    const quizId = filter._id;
+    if (!quizId) {
+        return next(new Error("quiz ID is required for deletion."));
+    }
+    try {
+        await mongoose.model("Question").deleteMany({ quiz: quizId });
+        next();
+    } catch (error) {
+        next();
+    }
+})
 const Quiz = model("Quiz",quizSchema);
 
 export default Quiz
