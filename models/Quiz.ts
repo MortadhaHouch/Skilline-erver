@@ -1,4 +1,4 @@
-import mongoose, {Schema,model} from "mongoose";
+import mongoose, {CallbackWithoutResultAndOptionalError, FilterQuery, Schema,model} from "mongoose";
 const quizSchema = new Schema({
     topic:{
         type: String,
@@ -24,8 +24,21 @@ const quizSchema = new Schema({
 },{
     timestamps: true
 })
-quizSchema.pre("deleteOne",async function (next) {
-    const filter = this.getFilter();
+quizSchema.pre("deleteOne",async function (next:CallbackWithoutResultAndOptionalError) {
+    const filter:FilterQuery<unknown> = this.getFilter();
+    const quizId = filter._id;
+    if (!quizId) {
+        return next(new Error("quiz ID is required for deletion."));
+    }
+    try {
+        await mongoose.model("Question").deleteMany({ quiz: quizId });
+        next();
+    } catch (error) {
+        next();
+    }
+})
+quizSchema.pre("deleteMany",async function (next:CallbackWithoutResultAndOptionalError) {
+    const filter:FilterQuery<unknown> = this.getFilter();
     const quizId = filter._id;
     if (!quizId) {
         return next(new Error("quiz ID is required for deletion."));

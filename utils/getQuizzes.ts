@@ -56,8 +56,6 @@ async function getQuizzes(category: string, limit: number, difficulty?: "easy" |
         return JSON.parse(response);
     } catch (error: any) {
         console.error("Error in getQuizzes function:", error);
-
-        // Handle specific API errors
         if (error.message.includes("API_KEY")) {
             throw new Error("Invalid or expired API key. Please check your .env file.");
         } else if (error.message.includes("quota")) {

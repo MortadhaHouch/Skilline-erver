@@ -14,6 +14,7 @@ import messageRouter from "./routes/message.route";
 import notificationRouter from "./routes/notification.route";
 import postRouter from "./routes/post.route";
 import quizRouter from "./routes/quiz.route";
+import commentRouter from "./routes/comment.route";
 dotenv.config()
 const app = express();
 app.use(cors({
@@ -29,7 +30,7 @@ const limiter = rateLimit({
     statusCode: 429,
 })
 app.use(limiter);
-app.use(helmet());
+// app.use(helmet());
 connectToDB();
 app.use(express.json());
 app.use(cookieParser());
@@ -44,7 +45,7 @@ app.use((req:Request,res:Response,next:NextFunction)=>{
 })
 app.use("/community",communityRouter);
 app.use("/course",courseRouter);
-app.use("/comment",communityRouter);
+app.use("/comment",commentRouter);
 app.use("/message",messageRouter);
 app.use("/notification",notificationRouter);
 app.use("/post",postRouter);

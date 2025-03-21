@@ -40,21 +40,32 @@ async function getAllQuizzes(req:Request,res:Response): Promise<void>{
                         const limit = 10;
                         const skip = (page - 1) * limit;
                         for(let i=0;i<course.quizzes.slice(skip,skip+limit).length;i++){
-                            quizzesSearch.push(Quiz.find(course.quizzes[i]));
+                            quizzesSearch.push(Quiz.findById(course.quizzes[i]).populate("creator","firstName lastName email _id"));
                         }
-                        const [quizzes] = await Promise.all(quizzesSearch);
+                        const quizzes = await Promise.all(quizzesSearch);
                         res.status(200).json({
-                            quizzes:quizzes.map((q)=>{
-                                return {
-                                    _id:q._id,
-                                    questions:q.questions,
-                                    difficulty:q.difficulty
+                            quizzes:quizzes?quizzes.map((q)=>{
+                                if(q){
+                                    const creator = q.creator as any;
+                                    return {
+                                        _id:q._id,
+                                        questions:q.questions,
+                                        difficulty:q.difficulty,
+                                        topic:q.topic,
+                                        participators:q.participators,
+                                        creator:{
+                                            _id:creator._id,
+                                            firstName:creator.firstName,
+                                            lastName:creator.lastName
+                                        }
+                                    }
                                 }
-                            }),
+                            }):[],
                             page,
                             course:{
                                 _id:course._id,
-                                title:course.title
+                                title:course.title,
+                                description:course.description
                             },
                             pages:Math.ceil(course.quizzes.length/limit),
                             count:course.quizzes.length
@@ -211,17 +222,30 @@ async function getQuizById(req:Request,res:Response): Promise<void>{
                                 questionsSearch.push(Question.findById(quiz.questions[i]));
                             }
                             const questions = await Promise.all(questionsSearch);
+                            const creator = await User.findById(quiz.creator)
                             res.status(200).json({
                                 quiz,
+                                ok:true,
                                 questions:questions.map((q)=>{
                                     if(q){
                                         return {
                                             question:q.question,
                                             options:q.options,
-                                            time:q.time
+                                            time:q.time,
+                                            _id:q._id
                                         }
                                     }
-                                })
+                                }),
+                                participators:quiz.participators,
+                                topic:quiz.topic,
+                                difficulty:quiz.difficulty,
+                                _id:quiz._id,
+                                creator:{
+                                    firstName:creator?.firstName||'',
+                                    lastName:creator?.lastName||'',
+                                    email:creator?.email||'',
+                                    _id:creator?._id||''
+                                }
                             });
                         }
                     }
@@ -269,6 +293,7 @@ async function answerQuiz(req:Request,res:Response):Promise<void>{
                                 time:number,
                                 user:Types.ObjectId,
                                 isCorrect:boolean
+                                correctAnswer:string
                             }[] = []
                             if(questions && Array.isArray(questions)){
                                 for (let i = 0; i < questions.length; i++) {
@@ -283,12 +308,13 @@ async function answerQuiz(req:Request,res:Response):Promise<void>{
                                             answer:answers[i].answer,
                                             time:answers[i].time,
                                             user:user._id,
-                                            isCorrect:question.correctAnswer === answers[i].answer
+                                            isCorrect:question.correctAnswer === answers[i].answer,
+                                            correctAnswer:question.correctAnswer
                                         });
-                                        question.results.push(result);
                                         if(!question.participators.includes(user._id)){
-                                            question.participators.push(user._id);
+                                            question.results.push(result);
                                         }
+                                        question.participators.push(user._id);
                                         await question.save();
                                     }
                                 }

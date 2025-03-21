@@ -24,6 +24,9 @@ async function getAllNotifications(req:Request, res:Response): Promise<any>{
             const skip = (page - 1) * limit;
             const notifications = await Notification.find({
                 "to.user":user._id
+            }).populate({
+                path:"from",
+                select:"firstName lastName email _id avatar"
             }).skip(skip).limit(limit).sort({ createdAt: -1 });            
             const total = await Notification.countDocuments(
                 {
@@ -31,7 +34,29 @@ async function getAllNotifications(req:Request, res:Response): Promise<any>{
                 }
             );
             const totalPages = Math.ceil(total / limit);
-            return res.status(200).json({notifications,page,pages:totalPages,count:totalPages});
+            return res.status(200).json({
+                notifications:notifications.map((n)=>{
+                    if(n){
+                        const from = n.from as any;
+                        return {
+                            _id:n._id,
+                            from:{
+                                _id:from._id,
+                                firstName:from.firstName,
+                                lastName:from.lastName,
+                                email:from.email,
+                                avatar:from.avatar
+                            },
+                            to:n.to,
+                            content:n.content,
+                            createdAt:n.createdAt
+                        };
+                    }
+                }),
+                page,
+                pages:totalPages,
+                count:totalPages
+            });
         }
     } catch (error) {
         console.log(error);

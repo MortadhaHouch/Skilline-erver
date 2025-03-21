@@ -177,9 +177,9 @@ async function getUsers(req:Request, res:Response):Promise<any>{
             {
                 $group: {
                     _id: {
-                        // year: { $year: "$createdAt" },
+                        year: { $year: "$createdAt" },
                         month: { $month: "$createdAt" },
-                        // day: { $dayOfMonth: "$createdAt" }
+                        day: { $dayOfMonth: "$createdAt" }
                     },
                     count: { $sum: 1 }
                 }
@@ -324,4 +324,55 @@ async function getStats(req:Request, res:Response):Promise<any>{
         res.status(500).json({message:"Internal server error"});
     }
 }
-export {login,signup,logout,getUsers,getUser,getUsersFiltered,getStats}
+async function updateUser(req:Request, res:Response):Promise<any>{
+    try {
+        const auth_token = req.cookies.auth_token;
+        if(!auth_token){
+            return res.status(401).json({auth_message:"No token provided"});
+        }
+        const {email} = jwt.verify(auth_token,process.env.SECRET_KEY as string) as {email:string};
+        const user = await User.findOne({email});
+        if(!user){
+            return res.status(401).json({user_message:"User not found"});
+        }else{
+            const {firstName,lastName,password,bio,interests} = req.body;
+            if(password){
+                user.password = password;
+                user.markModified("password");
+            }
+            if(firstName){
+                user.firstName = firstName;
+            }
+            if(lastName){
+                user.lastName = lastName;
+            }
+            if(bio){
+                user.bio = bio;
+            }
+            if(interests){
+                user.interests.push(...interests);
+            }
+            await user.save();
+            res.status(200).json({
+                message:"User updated successfully",
+                user:{
+                    id:user._id,
+                    firstName:user.firstName,
+                    lastName:user.lastName,
+                    email:user.email,
+                    avatar:user.avatar||"",
+                    bio:user.bio||"",
+                    role:user.role,
+                    isLoggedIn:user.isLoggedIn,
+                    createdAt:user.createdAt.toLocaleDateString(),
+                    updatedAt:user.updatedAt.toLocaleDateString(),
+                    interests:user.interests,
+                    index:user.index
+                }
+            });
+        }
+    } catch (error) {
+        console.log(error);
+    }
+}
+export {login,signup,logout,getUsers,getUser,getUsersFiltered,getStats,updateUser}

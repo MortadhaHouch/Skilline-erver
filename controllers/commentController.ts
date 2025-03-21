@@ -31,7 +31,7 @@ async function createComment(req:Request,res:Response): Promise<void>{
                     })
                     post.comments.push(comment._id);
                     await post.save();
-                    res.status(200).json({comment:{_id:comment._id,content:comment.content,author:{_id:user._id,firstName:user.firstName,lastName:user.lastName,email:user.email}}});
+                    res.status(200).json({comment:{_id:comment._id,content:comment.content,from:{_id:user._id,firstName:user.firstName,lastName:user.lastName,email:user.email}}});
                 }else{
                     res.status(404).json({message:"Post not found"});
                 }
@@ -56,12 +56,30 @@ async function getAllComments(req: Request, res: Response):Promise<any> {
             if(post){
                 const searchTasks = [];
                 for (let index = 0; index < post?.comments.slice(skip,skip+limit).length; index++) {
-                    searchTasks.push(Comment.findById(post.comments[index]));
+                    searchTasks.push(Comment.findById(post.comments[index]).populate("author","firstName lastName email avatar _id"));
                 }
                 const comments = await Promise.all(searchTasks);
                 const total = await Comment.countDocuments({post:post._id});
                 const totalPages = Math.ceil(total / limit);
-                res.status(200).json({comments,page,pages:totalPages,total});
+                res.status(200).json({
+                    comments:comments.map((c)=>{
+                        if(c){
+                            const author = c.author as any;
+                            return {
+                                _id:c._id,
+                                content:c.content,
+                                from:{
+                                    _id:author._id,
+                                    firstName:author.firstName,
+                                    lastName:author.lastName,
+                                    email:author.email
+                                }
+                            }
+                        }
+                    }),
+                    page,
+                    pages:totalPages,total
+                });
             }else{
                 res.status(404).json({message:"Post not found"});
             }

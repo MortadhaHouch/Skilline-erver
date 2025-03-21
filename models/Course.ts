@@ -1,50 +1,84 @@
-import mongoose, {Schema,model} from "mongoose";
+import mongoose, { ObjectId, Schema, model } from "mongoose";
 import fs from "fs/promises";
 import path from "path";
+
 const courseSchema = new Schema({
-    title:{
+    title: {
         type: String,
         required: true
     },
-    description:{
+    description: {
         type: String,
         required: true
     },
-    extra:{
-        type:[String]
+    extra: {
+        type: [String]
     },
-    resource:{
-        type:[String]
+    resource: {
+        type: [String]
     },
-    author:{
+    author: {
         type: Schema.Types.ObjectId,
         ref: "User"
     },
-    quizzes:{
+    quizzes: {
         type: [Schema.Types.ObjectId],
         ref: "Quiz"
     },
-    views:{
+    views: {
         type: Number,
         default: 0
     }
-})
-courseSchema.pre("deleteOne", { document: false, query: true }, async function (next) {
+});
+
+async function deleteRelatedQuizzes(quizzes:ObjectId[]) {
+    try {
+        await mongoose.model("Quiz").deleteMany({ _id: { $in: quizzes } });
+        console.log(`Successfully deleted quizzes: ${quizzes.length}`);
+    } catch (error) {
+        console.error("Error deleting quizzes:", error);
+    }
+}
+
+async function deleteCourseFolder(communityName:string, courseTitle:string) {
+    const folderPath = path.join(__dirname, "..", "uploads", communityName, courseTitle);
+    try {
+        await fs.access(folderPath);
+        await fs.rm(folderPath, { recursive: true, force: true });
+        console.log(`Successfully deleted folder: ${folderPath}`);
+    } catch (error:any) {
+        if (error.code === "ENOENT") {
+            console.warn(`Folder not found: ${folderPath}`);
+        } else if (error.code === "EACCES" || error.code === "EPERM") {
+            console.error(`Permission denied: Unable to delete folder ${folderPath}`);
+        } else {
+            console.error(`Error deleting folder ${folderPath}:`, error.message);
+        }
+    }
+}
+
+async function handleCourseDeletion(filter:ObjectId) {
+    const foundCourse = await mongoose.model("Course").findById(filter);
+    if (!foundCourse) {
+        console.log("Course not found");
+        return;
+    }
+    const community = await mongoose.model("Community").findOne({ courses: { $in: [foundCourse._id] } });
+    if (!community) {
+        console.log("Community not found");
+        return;
+    }
+    await deleteRelatedQuizzes(foundCourse.quizzes);
+    community.courses = community.courses.filter((courseId:ObjectId) => !courseId.toString()== foundCourse._id.toString());
+    await community.save();
+    await deleteCourseFolder(community.name, foundCourse.title);
+}
+
+courseSchema.pre(["findOneAndDelete", "deleteOne", "deleteMany"], { document: false, query: true }, async function (next) {
     try {
         const filter = this.getFilter()._id;
         if (filter) {
-            const foundCourse = await this.model.findOne(filter);
-            if (!foundCourse) {
-                throw new Error("Course not found")
-            }else{
-                const community = await mongoose.model("Community").findOne({ courses: { $in: [foundCourse._id] } });
-                if (!community) {
-                    throw new Error("Community not found")
-                }else{
-                    await mongoose.model("Quiz").deleteMany({ _id: { $in: foundCourse.quizzes } });
-                    console.log(`Deleted quizzes associated with course: ${foundCourse.title}`);
-                }
-            }
+            await handleCourseDeletion(filter);
         }
         next();
     } catch (error) {
@@ -52,4 +86,5 @@ courseSchema.pre("deleteOne", { document: false, query: true }, async function (
         next();
     }
 });
-export default model("Course", courseSchema)
+
+export default model("Course", courseSchema);
